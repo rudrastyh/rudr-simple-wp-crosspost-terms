@@ -5,7 +5,7 @@
  * Author URI: https://rudrastyh.com
  * Description: Allows to crosspost terms with all the data along with the post.
  * Plugin URI: https://rudrastyh.com/support/categories-tags-and-attributes-are-not-added
- * Version: 1.3
+ * Version: 1.4
  */
 add_filter( 'rudr_swc_terms', function( $remote_terms, $post_id, $taxonomy, $blog ) {
 	// taxonomy could be both name and object
