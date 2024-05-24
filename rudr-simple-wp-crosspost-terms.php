@@ -5,7 +5,7 @@
  * Author URI: https://rudrastyh.com
  * Description: Allows to crosspost terms with all the data along with the post.
  * Plugin URI: https://rudrastyh.com/support/categories-tags-and-attributes-are-not-added
- * Version: 1.4
+ * Version: 1.5
  */
 add_filter( 'rudr_swc_terms', function( $remote_terms, $post_id, $taxonomy, $blog ) {
 	// taxonomy could be both name and object
@@ -56,38 +56,81 @@ add_filter( 'rudr_swc_terms', function( $remote_terms, $post_id, $taxonomy, $blo
 
 			// taxonomy endpoint
 			$rest_base = isset( $taxonomy->rest_base ) && $taxonomy->rest_base ? $taxonomy->rest_base : $taxonomy->name;
+			// we need to add an image for WooCommerce product categories
+			if(
+				'product_cat' === $taxonomy->name
+				&& ( $product_cat_thumbnail_id = get_term_meta( $post_term->term_id, 'thumbnail_id', true ) )
+			) {
+				$thumbnail = Rudr_Simple_WP_Crosspost::maybe_crosspost_image( $product_cat_thumbnail_id, $blog );
+				if( isset( $thumbnail[ 'id' ] ) && $thumbnail[ 'id' ] ) {
+					$term_data[ 'image' ] = array(
+						'id' => $thumbnail[ 'id' ],
+					);
+				}
+			}
 			// term data filter
 			$term_data = apply_filters( 'rudr_swc_pre_crosspost_term_data', $term_data, $blog, 'term' );
 			// we don't need local term ID or taxonomy name in the body of the request further
 			unset( $term_data[ 'id' ] );
 			unset( $term_data[ 'taxonomy' ] );
 			if( ! array_key_exists( $post_term->slug, $remote_terms ) ) {
-				// create a new one
-				$request = wp_remote_post(
-					"{$blog[ 'url' ]}/wp-json/wp/v2/{$rest_base}",
-					array(
-						'headers' => array(
-							'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
-						),
-						'body' => $term_data,
-					)
-				);
+				// in case we're working with WooCommerce product categories taxonomy, we need to do some changes
+				if( 'product_cat' === $taxonomy->name ) {
+					$request = wp_remote_post(
+						"{$blog[ 'url' ]}/wp-json/wc/v3/products/categories",
+						array(
+							'timeout' => 30,
+							'headers' => array(
+								'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
+							),
+							'body' => $term_data,
+						)
+					);
+				} else {
+					$request = wp_remote_post(
+						"{$blog[ 'url' ]}/wp-json/wp/v2/{$rest_base}",
+						array(
+							'timeout' => 30,
+							'headers' => array(
+								'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
+							),
+							'body' => $term_data,
+						)
+					);
+				}
+//echo '<pre>';print_r( $request );exit;
 				if( 'Created' === wp_remote_retrieve_response_message( $request ) ) {
 					$term = json_decode( wp_remote_retrieve_body( $request ) );
-					$new_terms[] = $term;
+					if( isset( $term->id ) ) {
+						$new_terms[] = array( 'id' => $term->id );
+					}
 				}
 
 			} else {
-				// update an existing one
-				wp_remote_post(
-					"{$blog[ 'url' ]}/wp-json/wp/v2/{$rest_base}/{$remote_terms[ $post_term->slug ]}",
-					array(
-						'headers' => array(
-							'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
-						),
-						'body' => $term_data,
-					)
-				);
+				if( 'product_cat' === $taxonomy->name ) {
+					wp_remote_request(
+						"{$blog[ 'url' ]}/wp-json/wc/v3/products/categories/{$remote_terms[ $post_term->slug ]}",
+						array(
+							'method' => 'PUT',
+							'timeout' => 30,
+							'headers' => array(
+								'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
+							),
+							'body' => $term_data,
+						)
+					);
+				} else {
+					wp_remote_post(
+						"{$blog[ 'url' ]}/wp-json/wp/v2/{$rest_base}/{$remote_terms[ $post_term->slug ]}",
+						array(
+							'timeout' => 30,
+							'headers' => array(
+								'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
+							),
+							'body' => $term_data,
+						)
+					);
+				}
 
 			}
 
@@ -148,6 +191,7 @@ add_filter( 'rudr_swc_wc_attribute', function( $crossposted_attribute, $attribut
 		"{$blog[ 'url' ]}/wp-json/wc/v3/products/attributes",
 		array(
 			'method' => 'POST',
+			'timeout' => 30,
 			'headers' => array(
 				'Authorization' => 'Basic ' . base64_encode( "{$blog[ 'login' ]}:{$blog[ 'pwd' ]}" )
 			),
