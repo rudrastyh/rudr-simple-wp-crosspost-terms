@@ -69,7 +69,7 @@ add_filter( 'rudr_swc_terms', function( $remote_terms, $post_id, $taxonomy, $blo
 				}
 			}
 			// term data filter
-			$term_data = apply_filters( 'rudr_swc_pre_crosspost_term_data', $term_data, $blog, 'term' );
+			$term_data = apply_filters( 'rudr_swc_pre_crosspost_term_data', $term_data, $blog, $post_term );
 			// we don't need local term ID or taxonomy name in the body of the request further
 			unset( $term_data[ 'id' ] );
 			unset( $term_data[ 'taxonomy' ] );
